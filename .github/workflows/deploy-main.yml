@@ -37,9 +37,12 @@ jobs:
                   ssh playground-umc-8th 'sudo chown ubuntu:ubuntu /opt/app'
                   scp -r ./[!.]* playground-umc-8th:/opt/app
 
-            - name: Install dependencies
-              run: |
-                  ssh playground-umc-8th 'npm install --prefix /opt/app/'
+            # - name: Install dependencies
+            #   run: |
+            #       ssh playground-umc-8th 'npm install --prefix /opt/app/'
+
+            - name: Install dependencies (fast way)
+              run: ssh playground-umc-8th 'cd /opt/app && npm ci --verbose'
 
             - name: Copy systemd service file
               run: |
