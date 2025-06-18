@@ -32,7 +32,12 @@ jobs:
 
             - name: Compress project files
               run: |
-                  tar --exclude='.git' --exclude='node_modules' --exclude='.next' -czf app.tar.gz .
+                  tar -czf app.tar.gz \
+                  --exclude='.git' \
+                  --exclude='node_modules' \
+                  --exclude='.next' \
+                  --warning=no-file-changed \
+                  .
 
             - name: Transfer files to EC2
               run: |
