@@ -9,61 +9,60 @@ on:
 jobs:
     deploy:
         runs-on: ubuntu-latest
+
         steps:
-            - name: Checkout
+            - name: Checkout code
               uses: actions/checkout@v4
 
-            - name: Configure SSH
+            - name: Set up SSH
               run: |
                   mkdir -p ~/.ssh
-                  echo "$EC2_SSH_KEY" > ~/.ssh/id_rsa
+                  echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
                   chmod 600 ~/.ssh/id_rsa
 
-                  cat >>~/.ssh/config <<END
+                  cat >> ~/.ssh/config <<EOF
                   Host playground-umc-8th
-                    HostName $EC2_HOST
-                    User $EC2_USER
+                    HostName ${{ secrets.EC2_HOST }}
+                    User ubuntu
                     IdentityFile ~/.ssh/id_rsa
                     StrictHostKeyChecking no
-                  END
-              env:
-                  EC2_USER: ubuntu
-                  EC2_HOST: ${{ secrets.EC2_HOST }}
-                  EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+                    ServerAliveInterval 60
+                    ServerAliveCountMax 10
+                  EOF
 
-            - name: Copy Workspace
+            - name: Compress project files
               run: |
-                  ssh playground-umc-8th 'sudo mkdir -p /opt/app'
-                  ssh playground-umc-8th 'sudo chown ubuntu:ubuntu /opt/app'
-                  scp -r ./[!.]* playground-umc-8th:/opt/app
+                  tar --exclude='.git' --exclude='node_modules' --exclude='.next' -czf app.tar.gz .
 
-            # - name: Install dependencies
-            #   run: |
-            #       ssh playground-umc-8th 'npm install --prefix /opt/app/'
+            - name: Transfer files to EC2
+              run: |
+                  scp app.tar.gz playground-umc-8th:/tmp/app.tar.gz
 
-            - name: Install dependencies (fast way)
-              run: ssh playground-umc-8th 'cd /opt/app && npm ci --verbose'
-
-            - name: Copy systemd service file
+            - name: Deploy on EC2
               run: |
                   ssh playground-umc-8th '
+                    set -e
+                    sudo mkdir -p /opt/app
+                    sudo chown ubuntu:ubuntu /opt/app
+                    tar -xzf /tmp/app.tar.gz -C /opt/app
+                    rm /tmp/app.tar.gz
+
+                    cd /opt/app
+                    npm ci --only=production
+
                     echo "[Unit]
                     Description=UMC 8th Project
                     After=network.target
 
                     [Service]
-                    User=${USER}
+                    User=ubuntu
                     ExecStart=/usr/bin/npm run dev --prefix /opt/app/
                     Restart=always
 
                     [Install]
                     WantedBy=multi-user.target" | sudo tee /etc/systemd/system/app.service
+
+                    sudo systemctl daemon-reload
+                    sudo systemctl enable app
+                    sudo systemctl restart app
                   '
-
-            - name: Enable systemd service
-              run: |
-                  ssh playground-umc-8th 'sudo systemctl daemon-reload'
-                  ssh playground-umc-8th 'sudo systemctl enable app'
-
-            - name: Restart systemd service
-              run: ssh playground-umc-8th 'sudo systemctl restart app'
