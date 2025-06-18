@@ -34,18 +34,18 @@ jobs:
 
             - name: Sync files and setup server
               run: |
-                  ssh ec2-server '
+                  ssh playground-umc-8th '
                     set -e
 
                     sudo mkdir -p /opt/app &&
                     sudo chown ubuntu:ubuntu /opt/app
                   '
 
-                  rsync -az --delete ./ ec2-server:/opt/app/
+                  rsync -az --delete ./ playground-umc-8th:/opt/app/
 
             - name: Install and restart in one connection
               run: |
-                  ssh ec2-server '
+                  ssh playground-umc-8th '
                     set -e
 
                     cd /opt/app
