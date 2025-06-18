@@ -24,11 +24,6 @@ jobs:
                   target: "/opt/app"
                   rm: true
                   strip_components: 0
-                  exclude: |
-                      .git
-                      node_modules
-                      .next
-                      app.tar.gz
 
             - name: Deploy on EC2
               uses: appleboy/ssh-action@master
