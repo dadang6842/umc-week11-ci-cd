@@ -11,63 +11,48 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-            - name: Checkout code
+            - name: Checkout source code
               uses: actions/checkout@v4
 
-            - name: Set up SSH
-              run: |
-                  mkdir -p ~/.ssh
-                  echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
-                  chmod 600 ~/.ssh/id_rsa
-
-                  cat >> ~/.ssh/config <<EOF
-                  Host playground-umc-8th
-                    HostName ${{ secrets.EC2_HOST }}
-                    User ubuntu
-                    IdentityFile ~/.ssh/id_rsa
-                    StrictHostKeyChecking no
-                    ServerAliveInterval 60
-                    ServerAliveCountMax 10
-                  EOF
-
-            - name: Compress project files
-              run: |
-                  tar -czf app.tar.gz \
-                  --exclude='.git' \
-                  --exclude='node_modules' \
-                  --exclude='.next' \
-                  --warning=no-file-changed \
-                  .
-
-            - name: Transfer files to EC2
-              run: |
-                  scp app.tar.gz playground-umc-8th:/tmp/app.tar.gz
+            - name: Upload source files to EC2
+              uses: appleboy/scp-action@v0.1.7
+              with:
+                  host: ${{ secrets.EC2_HOST }}
+                  username: ubuntu
+                  key: ${{ secrets.EC2_SSH_KEY }}
+                  source: "."
+                  target: "/opt/app"
+                  rm: true
+                  strip_components: 0
+                  exclude: |
+                      .git
+                      node_modules
+                      .next
+                      app.tar.gz
 
             - name: Deploy on EC2
-              run: |
-                  ssh playground-umc-8th '
-                    set -e
-                    sudo mkdir -p /opt/app
-                    sudo chown ubuntu:ubuntu /opt/app
-                    tar -xzf /tmp/app.tar.gz -C /opt/app
-                    rm /tmp/app.tar.gz
+              uses: appleboy/ssh-action@master
+              with:
+                  host: ${{ secrets.EC2_HOST }}
+                  username: ubuntu
+                  key: ${{ secrets.EC2_SSH_KEY }}
+                  script: |
+                      set -e
+                      cd /opt/app
+                      npm ci --only=production
 
-                    cd /opt/app
-                    npm ci --only=production
+                      echo "[Unit]
+                      Description=UMC 8th Project
+                      After=network.target
 
-                    echo "[Unit]
-                    Description=UMC 8th Project
-                    After=network.target
+                      [Service]
+                      User=ubuntu
+                      ExecStart=/usr/bin/npm run dev --prefix /opt/app/
+                      Restart=always
 
-                    [Service]
-                    User=ubuntu
-                    ExecStart=/usr/bin/npm run dev --prefix /opt/app/
-                    Restart=always
+                      [Install]
+                      WantedBy=multi-user.target" | sudo tee /etc/systemd/system/app.service
 
-                    [Install]
-                    WantedBy=multi-user.target" | sudo tee /etc/systemd/system/app.service
-
-                    sudo systemctl daemon-reload
-                    sudo systemctl enable app
-                    sudo systemctl restart app
-                  '
+                      sudo systemctl daemon-reload
+                      sudo systemctl enable app
+                      sudo systemctl restart app
