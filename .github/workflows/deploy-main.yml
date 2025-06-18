@@ -3,7 +3,7 @@ name: deploy-main
 on:
     push:
         branches:
-            - master
+            - main
     workflow_dispatch:
 
 jobs:
@@ -11,43 +11,61 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-            - name: Checkout source code
+            - name: Checkout
               uses: actions/checkout@v4
 
-            - name: Upload source files to EC2
-              uses: appleboy/scp-action@v0.1.7
-              with:
-                  host: ${{ secrets.EC2_HOST }}
-                  username: ubuntu
-                  key: ${{ secrets.EC2_SSH_KEY }}
-                  source: "."
-                  target: "/opt/app"
-                  rm: true
-                  strip_components: 0
+            - name: Configure SSH
+              run: |
+                  mkdir -p ~/.ssh
+                  echo "$EC2_SSH_KEY" > ~/.ssh/id_rsa
+                  chmod 600 ~/.ssh/id_rsa
 
-            - name: Deploy on EC2
-              uses: appleboy/ssh-action@master
-              with:
-                  host: ${{ secrets.EC2_HOST }}
-                  username: ubuntu
-                  key: ${{ secrets.EC2_SSH_KEY }}
-                  script: |
-                      set -e
-                      cd /opt/app
-                      npm ci --only=production
+                  cat >> ~/.ssh/config <<END
+                  Host ec2-server
+                    HostName $EC2_HOST
+                    User $EC2_USER
+                    IdentityFile ~/.ssh/id_rsa
+                    StrictHostKeyChecking no
+                  END
+              env:
+                  EC2_USER: ubuntu
+                  EC2_HOST: ${{ secrets.EC2_HOST }}
+                  EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
 
-                      echo "[Unit]
-                      Description=UMC 8th Project
-                      After=network.target
+            - name: Sync files and setup server
+              run: |
+                  ssh ec2-server '
+                    set -e
 
-                      [Service]
-                      User=ubuntu
-                      ExecStart=/usr/bin/npm run dev --prefix /opt/app/
-                      Restart=always
+                    sudo mkdir -p /opt/app &&
+                    sudo chown ubuntu:ubuntu /opt/app
+                  '
 
-                      [Install]
-                      WantedBy=multi-user.target" | sudo tee /etc/systemd/system/app.service
+                  rsync -az --delete ./ ec2-server:/opt/app/
 
-                      sudo systemctl daemon-reload
-                      sudo systemctl enable app
-                      sudo systemctl restart app
+            - name: Install and restart in one connection
+              run: |
+                  ssh ec2-server '
+                    set -e
+
+                    cd /opt/app
+                    npm install
+
+                    sudo tee /etc/systemd/system/app.service > /dev/null <<EOF
+                    [Unit]
+                    Description=UMC 8th Project
+                    After=network.target
+
+                    [Service]
+                    User=ubuntu
+                    ExecStart=/usr/bin/npm run dev --prefix /opt/app/
+                    Restart=always
+
+                    [Install]
+                    WantedBy=multi-user.target
+                    EOF
+
+                    sudo systemctl daemon-reload
+                    sudo systemctl enable app
+                    sudo systemctl restart app
+                  '
