@@ -3,13 +3,12 @@ name: deploy-main
 on:
     push:
         branches:
-            - master
+            - main
     workflow_dispatch:
 
 jobs:
     deploy:
         runs-on: ubuntu-latest
-
         steps:
             - name: Checkout
               uses: actions/checkout@v4
@@ -20,7 +19,7 @@ jobs:
                   echo "$EC2_SSH_KEY" > ~/.ssh/id_rsa
                   chmod 600 ~/.ssh/id_rsa
 
-                  cat >> ~/.ssh/config <<END
+                  cat >>~/.ssh/config <<END
                   Host playground-umc-8th
                     HostName $EC2_HOST
                     User $EC2_USER
@@ -32,40 +31,37 @@ jobs:
                   EC2_HOST: ${{ secrets.EC2_HOST }}
                   EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
 
-            - name: Sync files and setup server
+            - name: Copy Workspace
+              run: |
+                  ssh playground-umc-8th 'sudo mkdir -p /opt/app'
+                  ssh playground-umc-8th 'sudo chown ubuntu:ubuntu /opt/app'
+                  scp -r ./[!.]* playground-umc-8th:/opt/app
+
+            - name: Install dependencies
+              run: |
+                  ssh playground-umc-8th 'npm install --prefix /opt/app/'
+
+            - name: Copy systemd service file
               run: |
                   ssh playground-umc-8th '
-                    set -e
-
-                    sudo mkdir -p /opt/app &&
-                    sudo chown ubuntu:ubuntu /opt/app
-                  '
-
-                  rsync -az --delete ./ playground-umc-8th:/opt/app/
-
-            - name: Install and restart in one connection
-              run: |
-                  ssh playground-umc-8th '
-                    set -e
-
-                    cd /opt/app
-                    npm install
-
-                    sudo tee /etc/systemd/system/app.service > /dev/null <<EOF
-                    [Unit]
-                    Description=UMC 8th Project
+                    echo "[Unit]
+                    Description=UMC 7th Project
                     After=network.target
 
                     [Service]
-                    User=ubuntu
+                    User=${USER}
                     ExecStart=/usr/bin/npm run dev --prefix /opt/app/
                     Restart=always
 
                     [Install]
-                    WantedBy=multi-user.target
-                    EOF
-
-                    sudo systemctl daemon-reload
-                    sudo systemctl enable app
-                    sudo systemctl restart app
+                    WantedBy=multi-user.target" | sudo tee /etc/systemd/system/app.service
                   '
+
+            - name: Enable systemd service
+              run: |
+                  ssh playground-umc-8th 'sudo systemctl daemon-reload'
+                  ssh playground-umc-8th 'sudo systemctl enable app'
+
+            - name: Restart systemd service
+              run: |
+                  ssh playground-umc-8th 'sudo systemctl restart app'
