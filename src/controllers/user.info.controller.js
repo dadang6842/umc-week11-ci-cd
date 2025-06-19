@@ -1,10 +1,10 @@
 import { StatusCodes } from "http-status-codes";
-import { bodyToUser } from "../dtos/user.dto.js";
-import { userSignUp } from "../services/user.service.js";
+import { bodyToUser } from "../dtos/user.info.dto.js";
+import { userInfo } from "../services/user.info.service.js";
 
-export const handleUserSignUp = async (req, res, next) => {
+export const handleUserInfo = async (req, res, next) => {
     /*
-    #swagger.summary = '회원 가입 API';
+    #swagger.summary = '회원 정보 수정 API';
     #swagger.requestBody = {
       required: true,
       content: {
@@ -16,7 +16,7 @@ export const handleUserSignUp = async (req, res, next) => {
       }
     };
     #swagger.responses[200] = {
-      description: "회원 가입 성공 응답",
+      description: "회원 정보 수정 성공 응답",
       content: {
         "application/json": {
           schema: {
@@ -25,12 +25,7 @@ export const handleUserSignUp = async (req, res, next) => {
               resultType: { type: "string", example: "SUCCESS" },
               error: { type: "object", nullable: true, example: null },
               success: {
-                type: "object",
-                properties: {
-                  email: { type: "string" },
-                  name: { type: "string" },
-                  preferCategory: { type: "array", items: { type: "string" } }
-                }
+                $ref: "#/components/schemas/User"
               }
             }
           }
@@ -38,7 +33,7 @@ export const handleUserSignUp = async (req, res, next) => {
       }
     };
     #swagger.responses[400] = {
-      description: "회원 가입 실패 응답",
+      description: "회원 정보 수정 실패 응답",
       content: {
         "application/json": {
           schema: {
@@ -63,10 +58,8 @@ export const handleUserSignUp = async (req, res, next) => {
       }
     };
   */
-    console.log("회원가입을 요청했습니다!");
     console.log("body:", req.body); // 값이 잘 들어오나 확인하기 위한 테스트용
-
-    const user = await userSignUp(bodyToUser(req.body));
+    const user = await userInfo(bodyToUser(req.params.userId, req.body));
 
     res.status(StatusCodes.OK).success(user);
 };
