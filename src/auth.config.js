@@ -9,7 +9,7 @@ export const googleStrategy = new GoogleStrategy(
     {
         clientID: process.env.PASSPORT_GOOGLE_CLIENT_ID,
         clientSecret: process.env.PASSPORT_GOOGLE_CLIENT_SECRET,
-        callbackURL: "http://http://ec2-52-79-33-102.ap-northeast-2.compute.amazonaws.com:3000/oauth2/callback/google",
+        callbackURL: "http://ec2-52-79-33-102.ap-northeast-2.compute.amazonaws.com:3000/oauth2/callback/google",
         scope: ["email", "profile"],
         state: true,
     },
